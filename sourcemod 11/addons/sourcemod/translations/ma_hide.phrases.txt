@@ -1,0 +1,20 @@
+"Phrases"
+{
+	"Hide_On"
+	{
+		"en"	"You are now hidden."
+		"ru"	"Скрытие включено."
+	}
+
+	"Hide_Off"
+	{
+		"en"	"You are no longer hidden."
+		"ru"	"Скрытие отключено."
+	}
+
+	"No_Access"
+	{
+		"en"	"You do not have access to this command."
+		"ru"	"У вас нет доступа к этой команде."
+	}
+}
