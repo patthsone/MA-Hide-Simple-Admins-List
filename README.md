@@ -1,6 +1,6 @@
 # MA Hide + Simple Admins List
 
-Комплект плагинов для SourceMod (CS:GO / CS:S), позволяющий администраторам скрываться из общего списка игроков и из меню `sm_admins`, а также вести рейтинг администраторов (лайки/дизлайки) и оставлять контактную информацию.
+Комплект плагинов для SourceMod (CS:GO / CS:S), позволяющий администраторам скрываться из общего списка игроков, меню `sm_admins` и списка VIP-игроков `/vips`, а также вести рейтинг администраторов (лайки/дизлайки) и оставлять контактную информацию.
 
 ![Total Downloads](https://img.shields.io/github/downloads/patthsone/MA-Hide-Simple-Admins-List/total?style=flat&label=Total%20Downloads&labelColor=rgba(0%2C%2070%2C%20114%2C%201)&color=rgba(255%2C%20255%2C%20255%2C%201)) 
 ![Latest Release](https://img.shields.io/github/v/release/patthsone/MA-Hide-Simple-Admins-List?style=flat&label=Latest%20Release&labelColor=rgba(0%2C%2070%2C%20114%2C%201)&color=rgba(255%2C%20255%2C%20255%2C%201)) 
@@ -13,6 +13,7 @@
 - Скрывает администратора с табло, радара и из списка `sm_admins` (при интеграции).
 - Автоматически переводит скрытого игрока в спектаторов и убирает его модель.
 - Не отображает скрытого администратора в меню `sm_admins` (благодаря нативной интеграции).
+- Не отображает скрытого администратора/VIP в списках `sm_vips`, `sm_viplist`, `sm_випс` при наличии R1KO VIP-Core.
 - Команда `sm_hide` — включить/выключить скрытие.
 
 ### Simple Admins List
@@ -27,7 +28,14 @@
 - Отображение групп и иммунитета (опционально).
 
 ## Интеграция
+
+### Simple Admins List
 Плагин `MA Hide` предоставляет нативную функцию `MA_IsClientHidden(client)`, которую `Simple Admins List` использует для фильтрации скрытых администраторов. Таким образом, если администратор включил `sm_hide`, он **не появится** в списке `sm_admins`.
+
+### R1KO VIP-Core
+`MA Hide` подключает `vip_core.inc` и перехватывает команды `sm_vips`, `sm_viplist`, `sm_випс`. Список VIP-игроков строится через natives VIP-Core, а игроки с включённым `sm_hide` из него исключаются.
+
+Если VIP-Core не загружен, `MA Hide` не ломает команду и отдаёт её дальше другим плагинам.
 
 ## Скачивание
 
@@ -38,12 +46,13 @@
 ## Установка
 
 1. Убедитесь, что у вас установлены SourceMod 1.10+ и MetaMod.
-2. Скомпилируйте оба плагина:
+2. Скомпилируйте плагины:
    - Поместите `ma_hide.inc` в папку `addons/sourcemod/scripting/include/`.
+   - Если нужна интеграция с `/vips`, поместите `vip_core.inc` из R1KO VIP-Core в `addons/sourcemod/scripting/include/`.
    - Скомпилируйте `ma_hide.sp` → `ma_hide.smx`.
    - Скомпилируйте `simple_admins_list.sp` → `simple_admins_list.smx`.
 3. Загрузите `.smx` файлы в папку `addons/sourcemod/plugins/`.
-4. **Важно:** Плагин `ma_hide.smx` должен загружаться **ПЕРЕД** `simple_admins_list.smx`. SourceMod загружает плагины в алфавитном порядке, если не указано иное. Переименуйте файлы или используйте `sm plugins load` вручную.
+4. **Важно:** Плагин `ma_hide.smx` должен загружаться **ПЕРЕД** `simple_admins_list.smx` и модулем, который выводит `/vips`. SourceMod загружает плагины в алфавитном порядке, если не указано иное. Переименуйте файлы или используйте `sm plugins load` вручную.
 5. Настройте базу данных (см. раздел «Настройка базы данных»).
 6. Перезапустите сервер или загрузите плагины через `sm plugins load`.
 
@@ -83,7 +92,9 @@ sm_admins_contactlen	20	Максимальная длина контакта
 sm_admins_messagelen	50	Максимальная длина личного сообщения
 Команды
 MA Hide
-sm_hide — включить/выключить скрытие. Доступно только администраторам с флагом (по умолчанию a). При включении игрок переходит в спектаторы и становится невидимым для других.
+sm_hide — включить/выключить скрытие. Доступно только администраторам. При включении игрок переходит в спектаторы и становится невидимым для других.
+
+sm_vips / sm_viplist / sm_випс — список VIP-игроков онлайн через VIP-Core. Скрытые через sm_hide игроки не отображаются.
 
 Simple Admins List
 sm_admins — открыть меню списка администраторов.
@@ -110,6 +121,8 @@ SourceMod 1.10 или новее.
 
 Material Admin (для получения срока истечения администратора).
 
+R1KO VIP-Core и `vip_core.inc` (если нужна интеграция со списком `/vips`).
+
 AS_Colors.inc (включена в поставку, но убедитесь, что она есть в include/).
 
 Права на создание таблиц в базе данных (автоматически).
@@ -118,6 +131,8 @@ AS_Colors.inc (включена в поставку, но убедитесь, ч
 Установите SourceMod и компилятор spcomp.exe (или spcomp для Linux).
 
 Положите ma_hide.inc в addons/sourcemod/scripting/include/.
+
+Положите vip_core.inc из R1KO VIP-Core в addons/sourcemod/scripting/include/.
 
 Поместите AS_Colors.inc в ту же папку.
 
@@ -131,6 +146,12 @@ spcomp simple_admins_list.sp
 Устранение неполадок
 Ошибка "MA_IsClientHidden" is not defined
 Убедитесь, что ma_hide.inc находится в папке include и плагин ma_hide скомпилирован первым. Если библиотека ma_hide не загружена, натива недоступна — перезагрузите ma_hide перед вторым плагином.
+
+Ошибка "vip_core.inc" not found
+Скачайте VIP-Core от R1KO и положите `vip_core.inc` в папку `addons/sourcemod/scripting/include/` перед компиляцией `ma_hide.sp`.
+
+Команда /vips показывает скрытого администратора
+Проверьте, что используется обновлённый `ma_hide.smx` версии 1.0.3 или новее. Также проверьте порядок загрузки: `ma_hide.smx` должен загружаться до модуля `VIP_Vips_Online`, чтобы перехватить команду.
 
 Скрытый администратор всё ещё виден в sm_admins
 Проверьте, что оба плагина загружены. Используйте sm plugins list. Если simple_admins_list загрузился раньше ma_hide, выполните sm plugins reload simple_admins_list. При постоянной проблеме добавьте зависимость в simple_admins_list.sp:

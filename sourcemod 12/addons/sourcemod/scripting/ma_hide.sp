@@ -3,10 +3,12 @@
 #include <sdkhooks>
 #include <cstrike>
 #include <materialadmin>
+#include <vip_core>
 #include <ma_hide.inc>
 
 new bool:g_bHide[MAXPLAYERS + 1];
 new bool:g_bChangingTeam[MAXPLAYERS + 1];
+new bool:g_bVipCoreLoaded;
 
 new bool:g_bHasTeamProp;
 new bool:g_bHasConnectedProp;
@@ -17,13 +19,16 @@ public Plugin:myinfo =
     name = "[MA] Hide",
     author = "PattHs",
     description = "MA Hide",
-    version = "1.0.2",
+    version = "1.0.3",
     url = "https://discord.gg/r9xZUwxjh6"
 };
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
     CreateNative("MA_IsClientHidden", Native_IsClientHidden);
+    MarkNativeAsOptional("VIP_IsClientVIP");
+    MarkNativeAsOptional("VIP_GetClientVIPGroup");
+    MarkNativeAsOptional("VIP_GetClientAccessTime");
     RegPluginLibrary("ma_hide");
     return APLRes_Success;
 }
@@ -42,8 +47,33 @@ public OnPluginStart()
 
     RegConsoleCmd("sm_hide", Command_Hide);
     AddCommandListener(Command_JoinTeam, "jointeam");
+    AddCommandListener(Command_Vips, "sm_vips");
+    AddCommandListener(Command_Vips, "sm_viplist");
+    AddCommandListener(Command_Vips, "sm_випс");
 
     CreateTimer(0.1, Timer_UpdateHidden, _, TIMER_REPEAT);
+    UpdateVipCoreStatus();
+}
+
+public OnAllPluginsLoaded()
+{
+    UpdateVipCoreStatus();
+}
+
+public OnLibraryAdded(const String:name[])
+{
+    if (StrEqual(name, "vip_core"))
+    {
+        UpdateVipCoreStatus();
+    }
+}
+
+public OnLibraryRemoved(const String:name[])
+{
+    if (StrEqual(name, "vip_core"))
+    {
+        g_bVipCoreLoaded = false;
+    }
 }
 
 public OnEntityCreated(entity, const String:classname[])
@@ -215,6 +245,169 @@ public Action:Command_Hide(client, args)
     }
 
     return Plugin_Handled;
+}
+
+public Action:Command_Vips(client, const String:command[], argc)
+{
+    if (!client || !IsClientInGame(client))
+        return Plugin_Continue;
+
+    UpdateVipCoreStatus();
+
+    if (!g_bVipCoreLoaded)
+        return Plugin_Continue;
+
+    ShowVipsMenu(client);
+    return Plugin_Handled;
+}
+
+ShowVipsMenu(client)
+{
+    new Handle:menu = CreateMenu(Handler_VipsMenu);
+    new String:name[MAX_NAME_LENGTH];
+    new String:userId[16];
+    new bool:hasItems = false;
+
+    SetMenuTitle(menu, "VIP-игроки онлайн:\n \n");
+
+    for (new i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i))
+            continue;
+
+        if (g_bHide[i])
+            continue;
+
+        if (!VIP_IsClientVIP(i))
+            continue;
+
+        if (!GetClientName(i, name, sizeof(name)))
+            continue;
+
+        IntToString(GetClientUserId(i), userId, sizeof(userId));
+        AddMenuItem(menu, userId, name);
+        hasItems = true;
+    }
+
+    if (!hasItems)
+    {
+        AddMenuItem(menu, "", "VIP-игроков онлайн нет", ITEMDRAW_DISABLED);
+    }
+
+    DisplayMenu(menu, client, 30);
+}
+
+public Handler_VipsMenu(Handle:menu, MenuAction:action, client, item)
+{
+    if (action == MenuAction_End)
+    {
+        CloseHandle(menu);
+    }
+    else if (action == MenuAction_Select)
+    {
+        new String:userId[16];
+        GetMenuItem(menu, item, userId, sizeof(userId));
+
+        new target = GetClientOfUserId(StringToInt(userId));
+
+        if (!target || !IsClientInGame(target) || g_bHide[target] || !g_bVipCoreLoaded || !VIP_IsClientVIP(target))
+        {
+            ShowVipsMenu(client);
+            return;
+        }
+
+        ShowVipInfoPanel(client, target);
+    }
+}
+
+ShowVipInfoPanel(client, target)
+{
+    new Handle:panel = CreatePanel();
+    new String:buffer[128];
+
+    SetPanelTitle(panel, "Информация\n \n");
+
+    DrawPanelText(panel, "Группа:");
+
+    if (VIP_GetClientVIPGroup(target, buffer, sizeof(buffer)) && buffer[0])
+    {
+        DrawPanelText(panel, buffer);
+    }
+    else
+    {
+        DrawPanelText(panel, "Неизвестно");
+    }
+
+    DrawPanelText(panel, " \n");
+    DrawPanelText(panel, "Истекает:");
+
+    new expire = VIP_GetClientAccessTime(target);
+
+    if (expire == -1)
+    {
+        DrawPanelText(panel, "Временно");
+    }
+    else if (expire == 0)
+    {
+        DrawPanelText(panel, "Никогда");
+    }
+    else
+    {
+        FormatVipTime(expire - GetTime(), buffer, sizeof(buffer));
+        DrawPanelText(panel, buffer);
+    }
+
+    DrawPanelText(panel, " \n");
+
+    SetPanelCurrentKey(panel, 8);
+    DrawPanelItem(panel, "Назад", ITEMDRAW_CONTROL);
+
+    DrawPanelItem(panel, " ", ITEMDRAW_SPACER|ITEMDRAW_RAWLINE);
+
+    SetPanelCurrentKey(panel, 10);
+    DrawPanelItem(panel, "Выход", ITEMDRAW_CONTROL);
+
+    SendPanelToClient(panel, client, Handler_VipInfoPanel, 30);
+    CloseHandle(panel);
+}
+
+public Handler_VipInfoPanel(Handle:panel, MenuAction:action, client, item)
+{
+    if (action == MenuAction_Select && item == 8)
+    {
+        ShowVipsMenu(client);
+    }
+}
+
+FormatVipTime(seconds, String:buffer[], maxlen)
+{
+    if (seconds <= 0)
+    {
+        FormatEx(buffer, maxlen, "Истекло");
+        return;
+    }
+
+    new days = seconds / 86400;
+    new hours = (seconds % 86400) / 3600;
+    new minutes = (seconds % 3600) / 60;
+
+    if (days > 0)
+    {
+        FormatEx(buffer, maxlen, "%d д. %d ч.", days, hours);
+    }
+    else if (hours > 0)
+    {
+        FormatEx(buffer, maxlen, "%d ч. %d мин.", hours, minutes);
+    }
+    else
+    {
+        FormatEx(buffer, maxlen, "%d мин.", minutes);
+    }
+}
+
+UpdateVipCoreStatus()
+{
+    g_bVipCoreLoaded = LibraryExists("vip_core") && GetFeatureStatus(FeatureType_Native, "VIP_IsClientVIP") == FeatureStatus_Available;
 }
 
 public Action:Timer_HideOn(Handle:timer, Handle:pack)
